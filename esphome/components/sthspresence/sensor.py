@@ -1,8 +1,10 @@
+# esphome/components/sthspresence/sensor.py
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import sensor
 from esphome.const import CONF_ID
 
+# Namespace matches C++ namespace below
 sthspresence_ns = cg.esphome_ns.namespace("sthspresence")
 STHS34PF80Sensor = sthspresence_ns.class_("STHS34PF80Sensor", cg.PollingComponent)
 
@@ -28,3 +30,4 @@ def to_code(config):
     if "motion" in config:
         sens = yield sensor.new_sensor(config["motion"])
         cg.add(var.set_motion_sensor(sens))
+
