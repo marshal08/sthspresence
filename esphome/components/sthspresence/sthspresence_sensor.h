@@ -28,14 +28,16 @@ class STHS34PF80Sensor : public PollingComponent {
   }
 
   void update() override {
-    float temp = sth_.readTemperature();
-    int presence = sth_.readPresence();
-    int motion = sth_.readMotion();
+  // Use the correct Adafruit API calls
+  float temp = sth_.readObjectTemperature();   // instead of readTemperature()
+  int presence = sth_.readPresence();          // check your header for exact name
+  int motion = sth_.readMotion();              // check your header for exact name
 
-    if (temperature_sensor_) temperature_sensor_->publish_state(temp);
-    if (presence_sensor_) presence_sensor_->publish_state(presence);
-    if (motion_sensor_) motion_sensor_->publish_state(motion);
-  }
+  if (temperature_sensor_) temperature_sensor_->publish_state(temp);
+  if (presence_sensor_) presence_sensor_->publish_state(presence);
+  if (motion_sensor_) motion_sensor_->publish_state(motion);
+}
+
 
  protected:
   static constexpr const char *TAG = "sthspresence";
