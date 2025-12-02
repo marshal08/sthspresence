@@ -12,4 +12,4 @@ CONFIG_SCHEMA = sensor.sensor_schema(STHS34PF80Sensor).extend({
 
 def to_code(config):
     var = cg.new_Pvariable(config[CONF_NAME])
-    yield sensor.register_sensor(var, 
+    yield sensor.register_sensor(var, config)
