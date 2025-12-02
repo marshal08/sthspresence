@@ -1,11 +1,11 @@
 // esphome/components/sthspresence/sthspresence_sensor.h
 #pragma once
 
+#include "esphome/core/component.h"   // PollingComponent
 #include "esphome/core/log.h"
 #include "esphome/components/sensor/sensor.h"
 
 #include "Adafruit_STHS34PF80.h"
-#include <Adafruit_Sensor.h>  // for sensors_event_t
 
 namespace esphome {
 namespace sthspresence {
@@ -28,21 +28,13 @@ class STHS34PF80Sensor : public PollingComponent {
   }
 
   void update() override {
-    sensors_event_t presence_evt;
-    sensors_event_t motion_evt;
-    sensors_event_t temp_evt;
+    float temp = sth_.readTemperature();
+    int presence = sth_.readPresence();
+    int motion = sth_.readMotion();
 
-    // Adjust this call if your driver uses different names.
-    // Many Adafruit Unified drivers expose getEvent(...)
-    bool ok = sth_.getEvent(&presence_evt, &motion_evt, &temp_evt);
-    if (!ok) {
-      ESP_LOGW(TAG, "Failed to read events");
-      return;
-    }
-
-    if (presence_sensor_) presence_sensor_->publish_state(presence_evt.data[0]);
-    if (motion_sensor_) motion_sensor_->publish_state(motion_evt.data[0]);
-    if (temperature_sensor_) temperature_sensor_->publish_state(temp_evt.temperature);
+    if (temperature_sensor_) temperature_sensor_->publish_state(temp);
+    if (presence_sensor_) presence_sensor_->publish_state(presence);
+    if (motion_sensor_) motion_sensor_->publish_state(motion);
   }
 
  protected:
