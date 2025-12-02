@@ -1,4 +1,8 @@
+// esphome/components/sthspresence/sthspresence_sensor.cpp
 #include "sthspresence_sensor.h"
 
-// Nothing extra needed here since all methods are inline in the header.
-// You could move method definitions here if you prefer cleaner headers.
+namespace esphome {
+namespace sthspresence {
+// All methods are defined inline in the header.
+}  // namespace sthspresence
+}  // namespace esphome
