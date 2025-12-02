@@ -2,7 +2,6 @@
 #pragma once
 
 #include "esphome/core/log.h"
-#include "esphome/components/polling_component/polling_component.h"
 #include "esphome/components/sensor/sensor.h"
 
 #include "Adafruit_STHS34PF80.h"
