@@ -206,8 +206,7 @@ class Adafruit_STHS34PF80 {
 };
 
 #endif
-root@e169b57b1134:/esphome/esphome/components/sthspresence# nano Adafruit_STHS34PF80.h
-root@e169b57b1134:/esphome/esphome/components/sthspresence# cat Adafruit_STHS34PF80.h
+
 /*!
  * @file Adafruit_STHS34PF80.h
  *
