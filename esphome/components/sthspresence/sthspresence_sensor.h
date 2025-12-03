@@ -13,67 +13,98 @@ class STHS34PF80Sensor : public PollingComponent {
  public:
   STHS34PF80Sensor() : PollingComponent(1000) {}
 
-  void set_temperature_sensor(sensor::Sensor *s) { temperature_sensor_ = s; }
+  void set_object_temperature_sensor(sensor::Sensor *s) { obj_temp_sensor_ = s; }
+  void set_ambient_temperature_sensor(sensor::Sensor *s) { amb_temp_sensor_ = s; }
   void set_presence_sensor(sensor::Sensor *s) { presence_sensor_ = s; }
   void set_motion_sensor(sensor::Sensor *s) { motion_sensor_ = s; }
 
   void setup() override {
-    // Initialize the sensor; no manual memory management
     if (!sth_.begin()) {
       ESP_LOGE(TAG, "Failed to initialize STHS34PF80!");
       this->mark_failed();
       return;
     }
 
-    // Optional: configure ODR/filters if your driver supports them
-    // sth_.setODR(STHS34PF80_ODR_1HZ);
-    // sth_.enableBlockDataUpdate(true);
+    // Recommended basic configuration: block data update and a modest ODR
+    // Adjust to your use-case; safeSetOutputDataRate exists internally in the driver.
+    if (!sth_.setBlockDataUpdate(true)) {
+      ESP_LOGW(TAG, "Failed to enable Block Data Update (BDU)");
+    }
+    if (!sth_.setOutputDataRate(STHS34PF80_ODR_1HZ)) {
+      ESP_LOGW(TAG, "Failed to set ODR to 1 Hz");
+    }
+
+    // Optional: tune filters/averaging for stability
+    // sth_.setTemperatureLowPassFilter(STHS34PF80_LPF_LOW);
+    // sth_.setMotionLowPassFilter(STHS34PF80_LPF_MEDIUM);
+    // sth_.setPresenceLowPassFilter(STHS34PF80_LPF_MEDIUM);
+    // sth_.setAmbTempAveraging(STHS34PF80_AVG_T_T_8);
+    // sth_.setObjAveraging(STHS34PF80_AVG_TMOS_8);
 
     ESP_LOGI(TAG, "STHS34PF80 initialized");
   }
 
   void update() override {
-    // Read temperature with the correct method (object temperature).
-    float temp_c = sth_.readObjectTemperature();
+    // Respect data-ready if available to avoid stale/invalid reads.
+    bool drdy = sth_.isDataReady();
+    if (!drdy) {
+      ESP_LOGD(TAG, "Data not ready yet");
+      // Still publish NaN for temps to avoid stale values; presence/motion can be held.
+      if (obj_temp_sensor_) obj_temp_sensor_->publish_state(NAN);
+      if (amb_temp_sensor_) amb_temp_sensor_->publish_state(NAN);
+      return;
+    }
 
-    // Sanity guard: if the driver returns nonsense, suppress it.
-    bool temp_sane = !isnan(temp_c) && temp_c > -50.0f && temp_c < 120.0f;
+    // Read temperatures using provided API
+    // Object temperature returns int16_t raw; compensated variant also int16_t.
+    // Ambient temperature returns float.
+    int16_t obj_raw = sth_.readObjectTemperature();                  // raw units (datasheet-defined scaling)
+    float amb_c     = sth_.readAmbientTemperature();                  // already °C
+    int16_t obj_comp = sth_.readCompensatedObjectTemperature();       // optional: may be closer to real °C scaling
 
-    // Read presence and motion.
-    // IMPORTANT: Replace the method names and types with the exact ones in your Adafruit_STHS34PF80.h.
-    // If they return float or int16_t, adjust types accordingly.
-    int presence = 0;
-    int motion = 0;
+    // Convert object temperature raw to °C if needed.
+    // If your driver’s raw already represents 0.1°C steps or similar, apply conversion here.
+    // For now, prefer compensated value when available; fall back to raw scaled heuristically if needed.
+    float obj_c = NAN;
+    if (obj_comp != 0) {
+      // Heuristic: assume compensated value in 0.1°C steps (adjust if your driver documents different scaling)
+      obj_c = static_cast<float>(obj_comp) / 10.0f;
+    } else {
+      // Fallback heuristic: scale raw similarly; update once you confirm exact scaling
+      obj_c = static_cast<float>(obj_raw) / 10.0f;
+    }
 
-    // Example placeholders — update to your driver’s actual methods:
-    // presence = sth_.readPresence();
-    // motion   = sth_.readMotion();
+    // Sanity clamp temperatures
+    auto sane_temp = [](float t) -> float {
+      if (isnan(t)) return NAN;
+      if (t < -50.0f || t > 120.0f) return NAN;
+      return t;
+    };
+    obj_c = sane_temp(obj_c);
+    amb_c = sane_temp(amb_c);
 
-    // If your driver uses different names (e.g., readPresenceLevel(), readMotionDelta()),
-    // change the calls above and consider scaling/clamping here.
+    // Read presence and motion (int16_t per your header)
+    int16_t presence = sth_.readPresence();
+    int16_t motion   = sth_.readMotion();
 
-    // Clamp counts (if applicable) to non-negative values
+    // Clamp negative noise to zero; adjust scaling if needed later
     if (presence < 0) presence = 0;
     if (motion < 0) motion = 0;
 
-    // Publish safely
-    if (temperature_sensor_) {
-      temperature_sensor_->publish_state(temp_sane ? temp_c : NAN);
-    }
-    if (presence_sensor_) {
-      presence_sensor_->publish_state(static_cast<float>(presence));
-    }
-    if (motion_sensor_) {
-      motion_sensor_->publish_state(static_cast<float>(motion));
-    }
+    // Publish
+    if (obj_temp_sensor_) obj_temp_sensor_->publish_state(obj_c);
+    if (amb_temp_sensor_) amb_temp_sensor_->publish_state(amb_c);
+    if (presence_sensor_) presence_sensor_->publish_state(static_cast<float>(presence));
+    if (motion_sensor_) motion_sensor_->publish_state(static_cast<float>(motion));
   }
 
  protected:
-  static constexpr const char *TAG = "sthspresence";
-  Adafruit_STHS34PF80 sth_;
-  sensor::Sensor *temperature_sensor_{nullptr};
-  sensor::Sensor *presence_sensor_{nullptr};
-  sensor::Sensor *motion_sensor_{nullptr};
+    static constexpr const char *TAG = "sthspresence";
+    Adafruit_STHS34PF80 sth_;
+    sensor::Sensor *obj_temp_sensor_{nullptr};
+    sensor::Sensor *amb_temp_sensor_{nullptr};
+    sensor::Sensor *presence_sensor_{nullptr};
+    sensor::Sensor *motion_sensor_{nullptr};
 };
 
 }  // namespace sthspresence
