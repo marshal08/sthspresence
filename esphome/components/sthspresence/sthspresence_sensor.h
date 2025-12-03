@@ -25,8 +25,7 @@ class STHS34PF80Sensor : public PollingComponent {
       return;
     }
 
-    // Recommended basic configuration: block data update and a modest ODR
-    // Adjust to your use-case; safeSetOutputDataRate exists internally in the driver.
+    // Basic recommended configuration
     if (!sth_.setBlockDataUpdate(true)) {
       ESP_LOGW(TAG, "Failed to enable Block Data Update (BDU)");
     }
@@ -34,44 +33,43 @@ class STHS34PF80Sensor : public PollingComponent {
       ESP_LOGW(TAG, "Failed to set ODR to 1 Hz");
     }
 
-    // Optional: tune filters/averaging for stability
-    // sth_.setTemperatureLowPassFilter(STHS34PF80_LPF_LOW);
-    // sth_.setMotionLowPassFilter(STHS34PF80_LPF_MEDIUM);
+    // Optional: tune filters/averaging (uncomment if desired and supported)
+    // (Choose configs from your driver’s enums)
+    // sth_.setTemperatureLowPassFilter(STHS34PF80_LPF_MEDIUM);
     // sth_.setPresenceLowPassFilter(STHS34PF80_LPF_MEDIUM);
+    // sth_.setMotionLowPassFilter(STHS34PF80_LPF_MEDIUM);
     // sth_.setAmbTempAveraging(STHS34PF80_AVG_T_T_8);
     // sth_.setObjAveraging(STHS34PF80_AVG_TMOS_8);
+    // sth_.setWideGainMode(false);
+    // sth_.setSensitivity(0);  // adjust to your scenario
 
     ESP_LOGI(TAG, "STHS34PF80 initialized");
   }
 
   void update() override {
-    // Respect data-ready if available to avoid stale/invalid reads.
-    bool drdy = sth_.isDataReady();
-    if (!drdy) {
+    // Respect data-ready to avoid stale reads
+    if (!sth_.isDataReady()) {
       ESP_LOGD(TAG, "Data not ready yet");
-      // Still publish NaN for temps to avoid stale values; presence/motion can be held.
+      // Publish NAN for temps when not ready to prevent stale values
       if (obj_temp_sensor_) obj_temp_sensor_->publish_state(NAN);
       if (amb_temp_sensor_) amb_temp_sensor_->publish_state(NAN);
       return;
     }
 
-    // Read temperatures using provided API
-    // Object temperature returns int16_t raw; compensated variant also int16_t.
-    // Ambient temperature returns float.
-    int16_t obj_raw = sth_.readObjectTemperature();                  // raw units (datasheet-defined scaling)
-    float amb_c     = sth_.readAmbientTemperature();                  // already °C
-    int16_t obj_comp = sth_.readCompensatedObjectTemperature();       // optional: may be closer to real °C scaling
+    // Ambient temperature: driver returns float °C
+    float amb_c = sth_.readAmbientTemperature();
 
-    // Convert object temperature raw to °C if needed.
-    // If your driver’s raw already represents 0.1°C steps or similar, apply conversion here.
-    // For now, prefer compensated value when available; fall back to raw scaled heuristically if needed.
+    // Object temperature: prefer compensated int16, fallback raw int16
+    int16_t obj_comp_raw = sth_.readCompensatedObjectTemperature();
+    int16_t obj_raw      = sth_.readObjectTemperature();
+
+    // Heuristic scaling for int16 raw values; adjust if your .cpp documents differently
+    // If compensated value is meaningful (non-zero or within plausible range), prefer it
     float obj_c = NAN;
-    if (obj_comp != 0) {
-      // Heuristic: assume compensated value in 0.1°C steps (adjust if your driver documents different scaling)
-      obj_c = static_cast<float>(obj_comp) / 10.0f;
+    if (obj_comp_raw != 0) {
+      obj_c = static_cast<float>(obj_comp_raw) / 10.0f;  // assume 0.1°C steps
     } else {
-      // Fallback heuristic: scale raw similarly; update once you confirm exact scaling
-      obj_c = static_cast<float>(obj_raw) / 10.0f;
+      obj_c = static_cast<float>(obj_raw) / 10.0f;       // fallback
     }
 
     // Sanity clamp temperatures
@@ -80,14 +78,14 @@ class STHS34PF80Sensor : public PollingComponent {
       if (t < -50.0f || t > 120.0f) return NAN;
       return t;
     };
-    obj_c = sane_temp(obj_c);
     amb_c = sane_temp(amb_c);
+    obj_c = sane_temp(obj_c);
 
-    // Read presence and motion (int16_t per your header)
+    // Presence and motion: int16_t raw amplitudes/counts
     int16_t presence = sth_.readPresence();
     int16_t motion   = sth_.readMotion();
 
-    // Clamp negative noise to zero; adjust scaling if needed later
+    // Clamp negative noise to zero
     if (presence < 0) presence = 0;
     if (motion < 0) motion = 0;
 
@@ -99,12 +97,12 @@ class STHS34PF80Sensor : public PollingComponent {
   }
 
  protected:
-    static constexpr const char *TAG = "sthspresence";
-    Adafruit_STHS34PF80 sth_;
-    sensor::Sensor *obj_temp_sensor_{nullptr};
-    sensor::Sensor *amb_temp_sensor_{nullptr};
-    sensor::Sensor *presence_sensor_{nullptr};
-    sensor::Sensor *motion_sensor_{nullptr};
+  static constexpr const char *TAG = "sthspresence";
+  Adafruit_STHS34PF80 sth_;
+  sensor::Sensor *obj_temp_sensor_{nullptr};
+  sensor::Sensor *amb_temp_sensor_{nullptr};
+  sensor::Sensor *presence_sensor_{nullptr};
+  sensor::Sensor *motion_sensor_{nullptr};
 };
 
 }  // namespace sthspresence
