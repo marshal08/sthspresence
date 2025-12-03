@@ -29,7 +29,7 @@ class STHS34PF80Sensor : public PollingComponent {
     if (!sth_.setBlockDataUpdate(true)) {
       ESP_LOGW(TAG, "Failed to enable Block Data Update (BDU)");
     }
-    if (!sth_.setOutputDataRate(STHS34PF80_ODR_1HZ)) {
+    if (!sth_.setOutputDataRate(STHS34PF80_ODR_1_HZ)) {
       ESP_LOGW(TAG, "Failed to set ODR to 1 Hz");
     }
 
