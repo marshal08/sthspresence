@@ -31,14 +31,17 @@
 /*!
  * @brief Instantiates a new STHS34PF80 class
  */
-Adafruit_STHS34PF80::Adafruit_STHS34PF80() {}
+Adafruit_STHS34PF80::Adafruit_STHS34PF80() : i2c_dev(nullptr) {}
+
 
 /*!
  * @brief Cleans up the STHS34PF80
  */
 Adafruit_STHS34PF80::~Adafruit_STHS34PF80() {
-  if (i2c_dev) {
-    delete i2c_dev;
+  Adafruit_I2CDevice* dev = i2c_dev;
+  i2c_dev = nullptr;
+  if (dev) {
+    delete dev;
   }
 }
 
@@ -49,15 +52,22 @@ Adafruit_STHS34PF80::~Adafruit_STHS34PF80() {
  * @return True if initialization was successful, otherwise false
  */
 bool Adafruit_STHS34PF80::begin(uint8_t i2c_addr, TwoWire* wire) {
-  if (i2c_dev) {
-    delete i2c_dev;
+  // If already initialized, don’t reallocate or delete. Treat as success.
+  if (i2c_dev != nullptr) {
+    return true;
   }
 
   i2c_dev = new Adafruit_I2CDevice(i2c_addr, wire);
-
-  if (!i2c_dev->begin()) {
+  if (i2c_dev == nullptr) {
     return false;
   }
+
+  if (!i2c_dev->begin()) {
+    delete i2c_dev;
+    i2c_dev = nullptr;
+    return false;
+  }
+
 
   if (!isConnected()) {
     return false;
